@@ -150,6 +150,7 @@
   /* ---------- portal view ---------- */
   #portal-view{display:none;}
 
+  .booking-panel{background:var(--paper-raised);border:1px solid var(--rule);box-shadow:var(--shadow);padding:18px;margin:0 0 22px}.booking-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.booking-kicker{font:9px 'JetBrains Mono',monospace;letter-spacing:.14em;color:var(--ink-soft)}.booking-head h3{font-family:'Fraunces',serif;font-size:20px;margin:3px 0}.booking-count{font:11px 'JetBrains Mono',monospace;border:1px solid var(--rule);border-radius:14px;padding:6px 9px}.booking-list{display:grid;gap:8px}.booking-card{border:1px solid var(--rule);background:var(--paper);padding:12px}.booking-card-top{display:flex;justify-content:space-between;gap:10px}.booking-property{font:600 17px 'Fraunces',serif}.booking-status{font:9px 'JetBrains Mono',monospace;padding:4px 7px;border:1px solid var(--sage);color:var(--sage);background:var(--sage-soft)}.booking-status.cancelled,.booking-status.pending{border-color:var(--brick);color:var(--brick);background:var(--brick-soft)}.booking-meta{display:grid;grid-template-columns:repeat(2,1fr);gap:6px 14px;margin-top:8px;font:10px 'JetBrains Mono',monospace;color:var(--ink-soft)}.booking-meta b{color:var(--ink);font-weight:500}.booking-slots{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}.booking-slot{font:9px 'JetBrains Mono',monospace;padding:4px 6px;border:1px solid var(--brick);background:var(--brick-soft);color:var(--brick)}.calendar-booking{margin-top:3px;padding:4px 5px;border-left:3px solid var(--brick);background:var(--brick-soft);color:var(--brick);font:8.5px/1.3 'JetBrains Mono',monospace}.calendar-booking strong{font-weight:600}
   .prop-select-row{
     display:flex; gap:10px; flex-wrap:wrap; margin-bottom:26px;
   }
@@ -273,6 +274,20 @@
     padding:0 14px; font-family:'JetBrains Mono', monospace; font-size:13px; cursor:pointer;
   }
   .modal-actions{display:flex; gap:10px; margin-top:6px;}
+  #refresh-btn{
+    background:transparent; color:var(--ink); border:1px solid var(--rule);
+    border-radius:2px; padding:7px 10px; font-family:'JetBrains Mono',monospace;
+    font-size:11px; cursor:pointer; white-space:nowrap;
+  }
+  #refresh-btn:hover{background:var(--paper);}
+  #refresh-btn:disabled{opacity:.55; cursor:wait;}
+  .modal-error{
+    display:none; margin:0 0 14px; padding:10px 12px;
+    border:1px solid var(--brick); background:var(--brick-soft); color:var(--brick);
+    font-family:'JetBrains Mono',monospace; font-size:11px; line-height:1.45;
+  }
+  .modal-error.show{display:block;}
+
   .modal-actions .btn{flex:1;}
 
   .empty-note{
@@ -300,10 +315,11 @@
   <div class="masthead">
     <div>
       <h1>Villa Ledger</h1>
-      <div class="tag">Owner Availability Portal · Demo</div>
+      <div class="tag">Owner Availability Portal</div>
     </div>
     <div class="owner-chip" id="owner-chip" style="display:none;">
       <span id="owner-chip-text"></span>
+      <button id="refresh-btn" type="button" title="Refresh availability">↻ Refresh</button>
       <button id="logout-btn">Log out</button>
     </div>
   </div>
@@ -321,6 +337,8 @@
   <!-- PORTAL -->
   <div id="portal-view">
     <div class="prop-select-row" id="prop-select-row"></div>
+
+    <section class="booking-panel" id="booking-panel"><div class="booking-head"><div><div class="booking-kicker">BOOKINGS</div><h3>Upcoming & recent bookings</h3></div><span class="booking-count" id="booking-count">0</span></div><div class="booking-list" id="booking-list"><div class="empty-note">No bookings found for this property.</div></div></section>
 
     <div class="cal-header">
       <h2 id="cal-month-label"></h2>
@@ -354,7 +372,9 @@
       <button class="sel-blocked" id="toggle-blocked">Blocked / booked</button>
     </div>
 
-    <div id="avail-fields">
+    <div id="modal-error" class="modal-error" role="alert" aria-live="polite"></div>
+
+      <div id="avail-fields">
       <label class="field-label">Time windows</label>
       <div class="time-list" id="time-list"></div>
       <div class="add-slot-row">
@@ -378,8 +398,6 @@
    CONFIG — point this at your n8n instance's webhook base URL
    ============================================================ */
 const API_BASE = "https://tempmailnvc4wrd32.app.n8n.cloud/webhook";
-const LOGIN_WEBHOOK = `${API_BASE}/owner-portal/login`;
-const SAVE_WEBHOOK = `${API_BASE}/owner-portal/save`;
 
 /* ---------------- state ---------------- */
 let state = {
@@ -387,6 +405,7 @@ let state = {
   ownerName: '',
   properties: [],
   slots: [],
+  bookings: [],
   activePropertyId: null,
   viewYear: new Date().getFullYear(),
   viewMonth: new Date().getMonth(), // 0-indexed
@@ -424,35 +443,49 @@ async function doLogin(){
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span>Checking…';
   try{
-    const res = await fetch(LOGIN_WEBHOOK, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone })
-    });
-
-    if (!res.ok) throw new Error(`Login request failed: ${res.status}`);
-
-    const data = await res.json();
-
-    if (!data.success) {
-      throw new Error(data.message || 'Phone number not found.');
+    const data = await callAPI('/owner-portal/login', { phone });
+    if (!data.success){
+      errEl.textContent = data.error || 'No properties found for this number.';
+      errEl.style.display = 'block';
+      return;
     }
-
-    data.properties = Array.isArray(data.properties) ? data.properties : [];
-    data.slots = Array.isArray(data.slots) ? data.slots : [];
-
     state.phone = phone;
-    state.ownerName = data.owner_name;
-    state.properties = data.properties;
-    state.slots = data.slots;
+    state.ownerName = data.owner_name || '';
+
+    // Normalize n8n response: the workflow may return duplicate items.
+    // Keep one property per property_id and one slot per slot_id/composite key.
+    const rawProperties = Array.isArray(data.properties) ? data.properties : [];
+    const propertyMap = new Map();
+    rawProperties.forEach(p => {
+      if (!p) return;
+      const id = p.property_id ?? p.id;
+      if (id == null) return;
+      if (!propertyMap.has(String(id))) {
+        propertyMap.set(String(id), { ...p, property_id: id });
+      }
+    });
+    state.properties = [...propertyMap.values()];
+
+    const rawSlots = Array.isArray(data.slots) ? data.slots : [];
+    const slotMap = new Map();
+    rawSlots.forEach(s => {
+      if (!s) return;
+      const key = s.slot_id != null
+        ? `id:${s.slot_id}`
+        : `slot:${s.property_id}|${s.date}|${s.start_time || ''}|${s.end_time || ''}|${s.status || ''}`;
+      if (!slotMap.has(key)) slotMap.set(key, s);
+    });
+    state.slots = dedupeSlots([...slotMap.values()]);
+    state.bookings = normalizeBookings(data.bookings);
+
     state.activePropertyId = state.properties[0]?.property_id || null;
 
-    // Remember only the demo login, not server/session data.
     localStorage.setItem('villa_owner_phone', phone);
 
     enterPortal();
   }catch(err){
-    errEl.textContent = 'Could not load the demo data.';
+    console.error('Owner portal login failed:', err);
+    errEl.textContent = err?.message || 'Could not reach the server. Check your connection and try again.';
     errEl.style.display = 'block';
   }finally{
     btn.disabled = false;
@@ -495,6 +528,13 @@ function renderPropertyPills(){
   });
 }
 
+function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function normalizeBookings(bs){const seen=new Set(),out=[];for(const b of Array.isArray(bs)?bs:[]){const x={...b,booking_id:String(b.booking_id??b.id??b['Booking ID']??''),property_id:String(b.property_id??b['Property ID']??''),property_name:b.property_name??b['Property Name']??'',customer_name:b.customer_name??b['Customer Name']??b.name??'',customer_phone:b.customer_phone??b['Customer Phone']??b.phone??'',check_in:normalizeDateValue(b.check_in??b['Check-in']??''),check_out:normalizeDateValue(b.check_out??b['Check-out']??''),status:String(b.status??b['Booking Status']??'confirmed').toLowerCase(),preferred_time:b.preferred_time??b['Preferred Time']??'',guests:b.guests??b.Guests??'',booked_slots:Array.isArray(b.booked_slots)?b.booked_slots:Array.isArray(b.slots)?b.slots:[]};const k=x.booking_id||`${x.property_id}|${x.check_in}|${x.check_out}|${x.customer_phone}`;if(!seen.has(k)){seen.add(k);out.push(x)}}return out}
+function bookingDates(b){const a=[];if(!b.check_in)return a;const end=b.check_out||b.check_in,d=new Date(b.check_in+'T00:00:00Z'),e=new Date(end+'T00:00:00Z');if(isNaN(d)||isNaN(e))return a;for(;d<e;d.setUTCDate(d.getUTCDate()+1))a.push(d.toISOString().slice(0,10));if(!a.length)a.push(b.check_in);return a}
+function activeBookings(){return state.bookings.filter(b=>!b.property_id||String(b.property_id)===String(state.activePropertyId))}
+function renderBookings(){const el=$('#booking-list'),count=$('#booking-count');if(!el)return;const bs=activeBookings().sort((a,b)=>String(a.check_in).localeCompare(String(b.check_in)));count.textContent=bs.length;if(!bs.length){el.innerHTML='<div class="empty-note">No bookings found for this property.</div>';return}el.innerHTML=bs.map(b=>{const st=['cancelled','pending'].includes(b.status)?b.status:'confirmed';const slots=b.booked_slots.map(x=>`<span class="booking-slot">${esc(normalizeDateValue(x.date))}${x.start_time&&x.end_time?' · '+esc(normalizeTimeValue(x.start_time))+'–'+esc(normalizeTimeValue(x.end_time)):''}</span>`).join('');return `<div class="booking-card"><div class="booking-card-top"><div class="booking-property">${esc(b.property_name||'Booking')}</div><span class="booking-status ${st}">${esc(st.toUpperCase())}</span></div><div class="booking-meta"><span>Guest <b>${esc(b.customer_name||b.customer_phone||'—')}</b></span><span>Phone <b>${esc(b.customer_phone||'—')}</b></span><span>Dates <b>${esc(b.check_in||'—')} → ${esc(b.check_out||'—')}</b></span><span>Guests <b>${esc(b.guests||'—')}</b></span><span>Time <b>${esc(b.preferred_time||'—')}</b></span><span>Booking <b>${esc(b.booking_id||'—')}</b></span></div>${slots?'<div class="booking-slots">'+slots+'</div>':''}</div>`}).join('')}
+function bookingsForDate(date){return activeBookings().filter(b=>bookingDates(b).includes(date))}
+
 /* ---------------- calendar rendering ---------------- */
 const DOW = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -514,11 +554,42 @@ function shiftMonth(delta){
   renderCalendar();
 }
 
+function normalizeTimeValue(v){
+  const s = String(v || '').trim();
+  const m = s.match(/^(\d{1,2}):(\d{2})/);
+  return m ? `${m[1].padStart(2,'0')}:${m[2]}` : '';
+}
+function normalizeDateValue(v){ return String(v || '').trim().slice(0,10); }
+function slotTimeKey(s){
+  return `${String(s.property_id || '')}|${normalizeDateValue(s.date)}|${normalizeTimeValue(s.start_time)}|${normalizeTimeValue(s.end_time)}`;
+}
+function dedupeSlots(slots){
+  const out = [], seen = new Set();
+  for (const s of (slots || [])){
+    if (!s) continue;
+    const item = {...s,
+      property_id:String(s.property_id || ''),
+      date:normalizeDateValue(s.date),
+      start_time:normalizeTimeValue(s.start_time),
+      end_time:normalizeTimeValue(s.end_time),
+      status:String(s.status || '').toLowerCase()
+    };
+    const key = slotTimeKey(item);
+    if (item.start_time && item.end_time && seen.has(key)) continue;
+    if (item.start_time && item.end_time) seen.add(key);
+    out.push(item);
+  }
+  return out;
+}
 function slotsForDate(dateISO){
-  return state.slots.filter(s => s.property_id === state.activePropertyId && s.date === dateISO);
+  return dedupeSlots(state.slots.filter(s =>
+    String(s.property_id) === String(state.activePropertyId) &&
+    normalizeDateValue(s.date) === normalizeDateValue(dateISO)
+  ));
 }
 
 function renderCalendar(){
+  renderBookings();
   $('#cal-month-label').textContent = `${MONTHS[state.viewMonth]} ${state.viewYear}`;
 
   const dowRow = $('#cal-dow-row');
@@ -554,7 +625,10 @@ function renderCalendar(){
     num.textContent = day;
     cell.appendChild(num);
 
-    const daySlots = slotsForDate(dateISO).filter(s => s.status !== 'removed');
+    const dayBookings=bookingsForDate(dateISO);
+    dayBookings.slice(0,2).forEach(b=>{const x=document.createElement('div');x.className='calendar-booking';x.innerHTML='<strong>BOOKED</strong> · '+esc(b.customer_name||b.customer_phone||'Booking');cell.appendChild(x)});
+    if(dayBookings.length>2){const x=document.createElement('div');x.className='calendar-booking';x.textContent='+'+(dayBookings.length-2)+' more booking';cell.appendChild(x)}
+    const daySlots = slotsForDate(dateISO).filter(s => s.status !== 'removed' && s.status !== 'booked');
     if (daySlots.length){
       const hasAvail = daySlots.some(s => s.status === 'available');
       const stamp = document.createElement('div');
@@ -580,10 +654,11 @@ function renderCalendar(){
 function openModal(dateISO){
   if (!state.activePropertyId){ toast('Select a property first.'); return; }
   state.modalDate = dateISO;
-  const existing = slotsForDate(dateISO).filter(s => s.status !== 'removed');
+  clearModalError();
+  const existing = dedupeSlots(slotsForDate(dateISO)).filter(s => s.status !== 'removed');
   const hasAvail = existing.some(s => s.status === 'available');
   state.modalStatus = existing.length === 0 ? 'available' : (hasAvail ? 'available' : 'blocked');
-  state.modalTimes = existing.filter(s => s.status === 'available')
+  state.modalTimes = existing.filter(s => s.status === 'available' && s.start_time && s.end_time)
     .map(s => ({ slot_id: s.slot_id, start_time: s.start_time, end_time: s.end_time }));
 
   $('#modal-date').textContent = new Date(dateISO+'T00:00:00').toLocaleDateString(undefined,{ weekday:'long', year:'numeric', month:'long', day:'numeric' });
@@ -630,73 +705,210 @@ function renderTimeList(){
 }
 
 $('#add-time-btn').addEventListener('click', () => {
-  const start = $('#new-start').value;
-  const end = $('#new-end').value;
-  if (!start || !end || start >= end){ toast('Enter a valid start/end time.'); return; }
-  state.modalTimes.push({ start_time:start, end_time:end });
+  clearModalError();
+  const start = normalizeTimeValue($('#new-start').value);
+  const end = normalizeTimeValue($('#new-end').value);
+
+  if (!start || !end){
+    showModalError('Please select both start and end time.');
+    return;
+  }
+  if (start >= end){
+    showModalError('Invalid time range. End time must be later than start time.');
+    return;
+  }
+
+  const mins = t => { const [h,m] = t.split(':').map(Number); return h*60+m; };
+  const a = mins(start), b = mins(end);
+
+  if (state.modalTimes.some(t =>
+      normalizeTimeValue(t.start_time) === start &&
+      normalizeTimeValue(t.end_time) === end)){
+    showModalError(`Duplicate time window: ${start} – ${end} is already added.`);
+    return;
+  }
+
+  const overlap = state.modalTimes.find(t => {
+    const x = mins(normalizeTimeValue(t.start_time));
+    const y = mins(normalizeTimeValue(t.end_time));
+    return a < y && b > x;
+  });
+  if (overlap){
+    showModalError(`This overlaps ${normalizeTimeValue(overlap.start_time)} – ${normalizeTimeValue(overlap.end_time)}.`);
+    return;
+  }
+
+  state.modalTimes.push({start_time:start, end_time:end});
   renderTimeList();
 });
+
+function showModalError(message){
+  const el = $('#modal-error');
+  if (!el) return;
+  el.textContent = message;
+  el.classList.add('show');
+}
+function clearModalError(){
+  const el = $('#modal-error');
+  if (!el) return;
+  el.textContent = '';
+  el.classList.remove('show');
+}
+function validateModalBeforeSave(){
+  if (state.modalStatus !== 'available') return {ok:true};
+  const mins = t => { const [h,m] = t.split(':').map(Number); return h*60+m; };
+  const seen = new Set();
+  const windows = [];
+  for (const t of state.modalTimes){
+    const s = normalizeTimeValue(t.start_time), e = normalizeTimeValue(t.end_time);
+    if (!s || !e) return {ok:false,message:'Every time window needs a start and end time.'};
+    if (s >= e) return {ok:false,message:`Invalid time window: ${s} – ${e}.`};
+    const key = `${s}|${e}`;
+    if (seen.has(key)) return {ok:false,message:`Duplicate time window: ${s} – ${e}. Remove it before saving.`};
+    seen.add(key);
+    windows.push({a:mins(s),b:mins(e),label:`${s} – ${e}`});
+  }
+  windows.sort((x,y)=>x.a-y.a);
+  for(let i=1;i<windows.length;i++){
+    if(windows[i].a < windows[i-1].b)
+      return {ok:false,message:`Overlapping time windows: ${windows[i-1].label} and ${windows[i].label}.`};
+  }
+  return {ok:true};
+}
 
 /* ---------------- save / delete ---------------- */
 $('#modal-save').addEventListener('click', saveModal);
 
 async function saveModal(){
   const btn = $('#modal-save');
+  clearModalError();
+
+  const check = validateModalBeforeSave();
+  if (!check.ok){
+    showModalError(check.message);
+    return;
+  }
+
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span>Saving…';
+
   try{
-    const payload = {
-      phone: state.phone,
-      property_id: state.activePropertyId,
-      date: state.modalDate,
-      status: state.modalStatus === 'blocked' ? 'unavailable' : 'available',
-      times: state.modalStatus === 'blocked'
-        ? []
-        : state.modalTimes.map(t => ({
-            slot_id: t.slot_id || null,
-            start_time: t.start_time,
-            end_time: t.end_time
-          }))
-    };
+    const existing = dedupeSlots(slotsForDate(state.modalDate))
+      .filter(s => s.status !== 'removed');
+    const keepIds = new Set(state.modalTimes.map(t => String(t.slot_id || '')).filter(Boolean));
 
-    const res = await fetch(SAVE_WEBHOOK, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-
-    if (!res.ok) throw new Error(`Save request failed: ${res.status}`);
-
-    const result = await res.json();
-
-    if (!result.success) {
-      throw new Error(result.message || 'Could not save availability.');
+    for (const s of existing){
+      const keep = state.modalStatus === 'available' && keepIds.has(String(s.slot_id || ''));
+      if (!keep){
+        const res = await callAPI('/owner-portal/slot/delete', {
+          phone:state.phone, property_id:state.activePropertyId, slot_id:s.slot_id
+        });
+        if (!res || res.success !== true)
+          throw new Error(res?.error || 'Could not remove an existing slot.');
+      }
     }
 
-    // If n8n returns updated slots, refresh the UI from them.
-    if (Array.isArray(result.slots)) {
-      state.slots = result.slots;
+    if (state.modalStatus === 'blocked'){
+      const res = await callAPI('/owner-portal/slot', {
+        phone:state.phone, property_id:state.activePropertyId,
+        date:state.modalDate, status:'unavailable'
+      });
+      if (!res || res.success !== true)
+        throw new Error(res?.error || 'Could not save blocked status.');
+    } else {
+      for (const t of state.modalTimes){
+        if (t.slot_id) continue;
+        const res = await callAPI('/owner-portal/slot', {
+          phone:state.phone, property_id:state.activePropertyId,
+          date:state.modalDate,
+          start_time:normalizeTimeValue(t.start_time),
+          end_time:normalizeTimeValue(t.end_time),
+          status:'available'
+        });
+        if (!res || res.success !== true)
+          throw new Error(res?.error || `Could not save ${t.start_time} – ${t.end_time}.`);
+      }
     }
 
-    toast('Availability saved.');
     closeModal();
-    renderCalendar();
+    toast('Availability saved. Refreshing…');
+    await refreshPortalData(false);
   }catch(err){
-    toast('Could not save. Try again.');
+    console.error(err);
+    showModalError(err?.message || 'Could not save availability. Please try again.');
+    toast('Save failed.');
   }finally{
     btn.disabled = false;
     btn.textContent = 'Save';
   }
 }
 
-async function callAPI(path, body){
-  const res = await fetch(`${API_BASE}${path}`, {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify(body)
-  });
-  return res.json();
+async function callAPI(path, body, base = API_BASE){
+  const url = `${base}${path}`;
+  let res = null;
+  let lastError = null;
+
+  for (const candidate of [url, url.replace('/webhook/', '/webhook-test/')]){
+    try{
+      res = await fetch(candidate, {
+        method:'POST',
+        headers:{'Content-Type':'application/json','Accept':'application/json'},
+        body:JSON.stringify(body || {})
+      });
+      if(res.ok) break;
+      lastError = new Error(`HTTP ${res.status}`);
+    }catch(e){ lastError=e; }
+  }
+
+  if(!res) throw new Error(`Could not reach the server. ${lastError?.message || ''}`.trim());
+
+  const raw = await res.text();
+  let data = {};
+  try { data = raw ? JSON.parse(raw) : {}; }
+  catch(e){ throw new Error(`Server returned an invalid response (${res.status}).`); }
+
+  if(data?.body && typeof data.body === 'object' && !Array.isArray(data.body)) data=data.body;
+  if(!res.ok) throw new Error(data?.error || data?.message || `Server request failed (${res.status}).`);
+  if(data?.success === false) throw new Error(data.error || data.message || 'The server rejected the request.');
+  return data;
 }
+async function refreshPortalData(showMessage = true){
+  if (!state.phone) return;
+  const btn = $('#refresh-btn');
+  const oldProperty = state.activePropertyId;
+  if(btn){ btn.disabled=true; btn.textContent='↻ Refreshing…'; }
+
+  try{
+    const data = await callAPI('/owner-portal/login', {phone:state.phone});
+    if(!data?.success) throw new Error(data?.error || 'Could not refresh availability.');
+
+    const pm = new Map();
+    for(const p of (Array.isArray(data.properties)?data.properties:[])){
+      const id = String(p.property_id ?? p.id ?? '');
+      if(id && !pm.has(id)) pm.set(id,{...p,property_id:id});
+    }
+    state.properties = [...pm.values()];
+    state.slots = dedupeSlots(Array.isArray(data.slots)?data.slots:[]);
+    state.bookings = normalizeBookings(data.bookings);
+    state.activePropertyId = state.properties.some(p=>String(p.property_id)===String(oldProperty))
+      ? oldProperty : (state.properties[0]?.property_id || null);
+    state.ownerName = data.owner_name || state.ownerName;
+
+    renderPropertyPills();
+    renderCalendar();
+    if(showMessage) toast('Availability refreshed.');
+  }catch(err){
+    console.error('Refresh failed:',err);
+    if(showMessage) toast(err?.message || 'Could not refresh availability.');
+    throw err;
+  }finally{
+    if(btn){ btn.disabled=false; btn.textContent='↻ Refresh'; }
+  }
+}
+
+$('#refresh-btn').addEventListener('click', async () => {
+  try { await refreshPortalData(true); } catch (_) {}
+});
 
 /* ---------------- auto-login if remembered ---------------- */
 (function tryAutoLogin(){
@@ -706,6 +918,21 @@ async function callAPI(path, body){
     doLogin();
   }
 })();
+
+/* ---------- Portal safety / refresh logic ---------- */
+let portalRefreshTimer = null;
+document.addEventListener('visibilitychange', () => {
+  if(!document.hidden && state.phone){
+    clearTimeout(portalRefreshTimer);
+    portalRefreshTimer = setTimeout(()=>refreshPortalData(false).catch(()=>{}),700);
+  }
+});
+window.addEventListener('focus', () => {
+  if(state.phone){
+    clearTimeout(portalRefreshTimer);
+    portalRefreshTimer = setTimeout(()=>refreshPortalData(false).catch(()=>{}),700);
+  }
+});
 </script>
 
 </body>
