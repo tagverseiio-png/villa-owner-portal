@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Villa Ledger — Owner Portal</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=JetBrains+Mono:wght@400;500;600&family=Source+Sans+3:wght@400;500;600&display=swap');
+
+  :root{
+    --paper:#F7F3EA;
+    --paper-raised:#FFFDF8;
+    --ink:#20281F;
+    --ink-soft:#5B6355;
+    --rule:#D9D0BC;
+    --clay:#B8531F;
+    --clay-deep:#8F3E15;
+    --sage:#5F7A5A;
+    --sage-soft:#E4EBDF;
+    --brick:#8C3A34;
+    --brick-soft:#F3E0DD;
+    --stamp-ink:#20281F;
+    --shadow: 0 1px 0 rgba(32,40,31,0.06), 0 8px 24px -12px rgba(32,40,31,0.25);
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(ellipse at top left, rgba(184,83,31,0.05), transparent 45%),
+      var(--paper);
+    background-attachment:fixed;
+    color:var(--ink);
+    font-family:'Source Sans 3', sans-serif;
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+  }
+  body::before{
+    content:"";
+    position:fixed; inset:0;
+    background-image:
+      repeating-linear-gradient(rgba(32,40,31,0.018) 0 1px, transparent 1px 28px);
+    pointer-events:none;
+    z-index:0;
+  }
+
+  .wrap{position:relative; z-index:1; max-width:920px; margin:0 auto; padding:32px 20px 80px;}
+
+  /* ---------- header ---------- */
+  .masthead{
+    display:flex; align-items:baseline; justify-content:space-between;
+    border-bottom:2px solid var(--ink);
+    padding-bottom:14px; margin-bottom:28px;
+    flex-wrap:wrap; gap:10px;
+  }
+  .masthead h1{
+    font-family:'Fraunces', serif;
+    font-weight:700;
+    font-optical-sizing:auto;
+    font-size:clamp(26px,4vw,34px);
+    letter-spacing:-0.01em;
+    margin:0;
+  }
+  .masthead .tag{
+    font-family:'JetBrains Mono', monospace;
+    font-size:11px;
+    letter-spacing:0.12em;
+    text-transform:uppercase;
+    color:var(--ink-soft);
+  }
+  .owner-chip{
+    font-family:'JetBrains Mono', monospace;
+    font-size:12px;
+    display:flex; align-items:center; gap:10px;
+    color:var(--ink-soft);
+  }
+  .owner-chip button{
+    background:none; border:1px solid var(--rule); color:var(--ink-soft);
+    font-family:'JetBrains Mono', monospace; font-size:11px;
+    padding:5px 10px; border-radius:3px; cursor:pointer;
+  }
+  .owner-chip button:hover{border-color:var(--ink); color:var(--ink);}
+
+  /* ---------- login card ---------- */
+  #login-view{
+    max-width:420px; margin:60px auto 0;
+    background:var(--paper-raised);
+    border:1px solid var(--rule);
+    box-shadow:var(--shadow);
+    padding:40px 36px;
+    position:relative;
+  }
+  #login-view::before{
+    content:"";
+    position:absolute; top:0; left:0; right:0; height:4px;
+    background:linear-gradient(90deg, var(--clay), var(--sage));
+  }
+  #login-view h2{
+    font-family:'Fraunces', serif; font-weight:600; font-size:22px;
+    margin:0 0 6px;
+  }
+  #login-view p.sub{
+    color:var(--ink-soft); font-size:14px; margin:0 0 26px; line-height:1.5;
+  }
+  .field-label{
+    font-family:'JetBrains Mono', monospace;
+    font-size:11px; letter-spacing:0.08em; text-transform:uppercase;
+    color:var(--ink-soft); display:block; margin-bottom:8px;
+  }
+  input[type="tel"], input[type="text"], input[type="date"], input[type="time"], select{
+    width:100%;
+    font-family:'JetBrains Mono', monospace;
+    font-size:16px;
+    padding:12px 14px;
+    border:1.5px solid var(--rule);
+    background:var(--paper);
+    color:var(--ink);
+    border-radius:2px;
+    outline:none;
+  }
+  input:focus, select:focus{border-color:var(--clay);}
+  .btn{
+    font-family:'JetBrains Mono', monospace;
+    font-size:13px; letter-spacing:0.04em; text-transform:uppercase;
+    padding:13px 20px;
+    border:none; border-radius:2px;
+    cursor:pointer;
+    transition:transform .12s ease, box-shadow .12s ease;
+  }
+  .btn:active{transform:translateY(1px);}
+  .btn-primary{background:var(--clay); color:#fff; width:100%; margin-top:22px;}
+  .btn-primary:hover{background:var(--clay-deep);}
+  .btn-ghost{background:transparent; border:1.5px solid var(--ink); color:var(--ink);}
+  .btn-ghost:hover{background:var(--ink); color:var(--paper);}
+  .btn-sage{background:var(--sage); color:#fff;}
+  .btn-brick{background:var(--brick); color:#fff;}
+  .btn:disabled{opacity:0.5; cursor:not-allowed;}
+
+  #login-error{
+    color:var(--brick); font-size:13px; margin-top:14px; display:none;
+    font-family:'JetBrains Mono', monospace;
+  }
+  .spinner{
+    display:inline-block; width:14px; height:14px;
+    border:2px solid rgba(255,255,255,0.4); border-top-color:#fff;
+    border-radius:50%; animation:spin .7s linear infinite; vertical-align:-2px; margin-right:8px;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  /* ---------- portal view ---------- */
+  #portal-view{display:none;}
+
+  .prop-select-row{
+    display:flex; gap:10px; flex-wrap:wrap; margin-bottom:26px;
+  }
+  .prop-pill{
+    font-family:'JetBrains Mono', monospace; font-size:12px;
+    padding:9px 14px; border:1.5px solid var(--rule); border-radius:20px;
+    cursor:pointer; background:var(--paper-raised); color:var(--ink-soft);
+  }
+  .prop-pill.active{border-color:var(--clay); color:var(--clay-deep); background:#FBEEE4; font-weight:600;}
+
+  .cal-header{
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:18px;
+  }
+  .cal-header h2{
+    font-family:'Fraunces', serif; font-weight:600; font-size:24px; margin:0;
+  }
+  .cal-nav{display:flex; gap:8px; align-items:center;}
+  .cal-nav button{
+    width:34px; height:34px; border-radius:50%;
+    border:1.5px solid var(--ink); background:transparent;
+    font-family:'JetBrains Mono', monospace; font-size:15px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .cal-nav button:hover{background:var(--ink); color:var(--paper);}
+
+  .legend{display:flex; gap:18px; margin-bottom:16px; flex-wrap:wrap;}
+  .legend span{
+    font-family:'JetBrains Mono', monospace; font-size:11px; color:var(--ink-soft);
+    display:flex; align-items:center; gap:6px;
+  }
+  .dot{width:9px; height:9px; border-radius:50%; display:inline-block;}
+  .dot.avail{background:var(--sage);}
+  .dot.blocked{background:var(--brick);}
+  .dot.empty{background:var(--rule);}
+
+  .cal-grid{
+    display:grid; grid-template-columns:repeat(7,1fr);
+    gap:6px;
+    background:var(--rule);
+    padding:1px;
+    border:1px solid var(--rule);
+  }
+  .cal-dow{
+    font-family:'JetBrains Mono', monospace; font-size:10px; letter-spacing:0.08em;
+    text-transform:uppercase; color:var(--ink-soft); text-align:center;
+    padding:6px 0; background:var(--paper);
+  }
+  .cal-cell{
+    background:var(--paper-raised);
+    min-height:78px;
+    padding:8px 8px 6px;
+    cursor:pointer;
+    position:relative;
+    display:flex; flex-direction:column; gap:4px;
+    transition:background .1s ease;
+  }
+  .cal-cell:hover{background:#FBF7EE;}
+  .cal-cell.pad{background:var(--paper); cursor:default;}
+  .cal-cell.pad:hover{background:var(--paper);}
+  .cal-cell .daynum{
+    font-family:'Fraunces', serif; font-size:15px; font-weight:600; color:var(--ink);
+  }
+  .cal-cell.today .daynum{
+    background:var(--ink); color:var(--paper);
+    width:22px; height:22px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center; font-size:12px;
+  }
+  .stamp{
+    font-family:'JetBrains Mono', monospace; font-size:9.5px;
+    padding:2px 5px; border-radius:2px;
+    display:inline-block; width:fit-content;
+    transform:rotate(-1.2deg);
+    letter-spacing:0.02em;
+  }
+  .stamp.avail{background:var(--sage-soft); color:var(--sage); border:1px solid var(--sage);}
+  .stamp.blocked{background:var(--brick-soft); color:var(--brick); border:1px solid var(--brick);}
+  .cell-times{font-family:'JetBrains Mono', monospace; font-size:9px; color:var(--ink-soft); line-height:1.35;}
+
+  /* ---------- modal ---------- */
+  .modal-backdrop{
+    display:none; position:fixed; inset:0; background:rgba(32,40,31,0.45);
+    align-items:center; justify-content:center; z-index:50; padding:20px;
+  }
+  .modal-backdrop.open{display:flex;}
+  .modal{
+    background:var(--paper-raised); border:1px solid var(--rule);
+    max-width:420px; width:100%; padding:30px 28px;
+    box-shadow:var(--shadow); position:relative;
+  }
+  .modal h3{
+    font-family:'Fraunces', serif; font-weight:600; font-size:20px; margin:0 0 4px;
+  }
+  .modal .modal-date{
+    font-family:'JetBrains Mono', monospace; font-size:12px; color:var(--ink-soft); margin-bottom:20px;
+  }
+  .modal-close{
+    position:absolute; top:18px; right:18px; background:none; border:none;
+    font-size:20px; cursor:pointer; color:var(--ink-soft); line-height:1;
+  }
+  .status-toggle{display:flex; gap:8px; margin-bottom:18px;}
+  .status-toggle button{
+    flex:1; padding:11px; border:1.5px solid var(--rule); background:var(--paper);
+    font-family:'JetBrains Mono', monospace; font-size:12px; cursor:pointer; border-radius:2px;
+  }
+  .status-toggle button.sel-avail.active{border-color:var(--sage); background:var(--sage-soft); color:var(--sage); font-weight:600;}
+  .status-toggle button.sel-blocked.active{border-color:var(--brick); background:var(--brick-soft); color:var(--brick); font-weight:600;}
+
+  .time-row{display:flex; gap:10px; margin-bottom:8px;}
+  .time-row .field{flex:1;}
+  .time-list{margin-bottom:16px;}
+  .time-list-item{
+    display:flex; align-items:center; justify-content:space-between;
+    font-family:'JetBrains Mono', monospace; font-size:12px;
+    padding:8px 10px; background:var(--sage-soft); border-radius:2px; margin-bottom:6px;
+  }
+  .time-list-item button{background:none; border:none; color:var(--brick); cursor:pointer; font-size:14px;}
+  .add-slot-row{display:flex; gap:8px; margin-bottom:18px;}
+  .add-slot-row button{
+    background:var(--ink); color:var(--paper); border:none; border-radius:2px;
+    padding:0 14px; font-family:'JetBrains Mono', monospace; font-size:13px; cursor:pointer;
+  }
+  .modal-actions{display:flex; gap:10px; margin-top:6px;}
+  .modal-actions .btn{flex:1;}
+
+  .empty-note{
+    font-family:'JetBrains Mono', monospace; font-size:12px; color:var(--ink-soft);
+    text-align:center; padding:40px 20px; border:1px dashed var(--rule); margin-top:20px;
+  }
+  .toast{
+    position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px);
+    background:var(--ink); color:var(--paper); font-family:'JetBrains Mono', monospace;
+    font-size:12px; padding:12px 20px; border-radius:3px; opacity:0; pointer-events:none;
+    transition:opacity .2s ease, transform .2s ease; z-index:100;
+  }
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+
+  @media (max-width:520px){
+    .cal-cell{min-height:64px; padding:6px 6px 4px;}
+    .stamp{font-size:8.5px;}
+    #login-view{padding:30px 22px;}
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="masthead">
+    <div>
+      <h1>Villa Ledger</h1>
+      <div class="tag">Owner Availability Portal · Demo</div>
+    </div>
+    <div class="owner-chip" id="owner-chip" style="display:none;">
+      <span id="owner-chip-text"></span>
+      <button id="logout-btn">Log out</button>
+    </div>
+  </div>
+
+  <!-- LOGIN -->
+  <div id="login-view">
+    <h2>Enter your number</h2>
+    <p class="sub">No password — just the phone number linked to your property listing.</p>
+    <label class="field-label" for="phone-input">Phone number</label>
+    <input type="tel" id="phone-input" placeholder="9941968238" inputmode="numeric" autocomplete="tel">
+    <button class="btn btn-primary" id="login-btn">Open my calendar</button>
+    <div id="login-error"></div>
+  </div>
+
+  <!-- PORTAL -->
+  <div id="portal-view">
+    <div class="prop-select-row" id="prop-select-row"></div>
+
+    <div class="cal-header">
+      <h2 id="cal-month-label"></h2>
+      <div class="cal-nav">
+        <button id="cal-prev">&larr;</button>
+        <button id="cal-today">Today</button>
+        <button id="cal-next">&rarr;</button>
+      </div>
+    </div>
+
+    <div class="legend">
+      <span><span class="dot avail"></span> Available</span>
+      <span><span class="dot blocked"></span> Blocked</span>
+      <span><span class="dot empty"></span> Not set — tap to add</span>
+    </div>
+
+    <div class="cal-grid" id="cal-dow-row"></div>
+    <div class="cal-grid" id="cal-grid" style="margin-top:6px;"></div>
+  </div>
+</div>
+
+<!-- Day edit modal -->
+<div class="modal-backdrop" id="modal-backdrop">
+  <div class="modal">
+    <button class="modal-close" id="modal-close">&times;</button>
+    <h3>Update availability</h3>
+    <div class="modal-date" id="modal-date"></div>
+
+    <div class="status-toggle">
+      <button class="sel-avail" id="toggle-avail">Available</button>
+      <button class="sel-blocked" id="toggle-blocked">Blocked / booked</button>
+    </div>
+
+    <div id="avail-fields">
+      <label class="field-label">Time windows</label>
+      <div class="time-list" id="time-list"></div>
+      <div class="add-slot-row">
+        <div class="field"><input type="time" id="new-start" value="10:00"></div>
+        <div class="field"><input type="time" id="new-end" value="18:00"></div>
+        <button id="add-time-btn">Add</button>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="modal-cancel">Cancel</button>
+      <button class="btn btn-primary" id="modal-save" style="margin-top:0;">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+   CONFIG — point this at your n8n instance's webhook base URL
+   ============================================================ */
+const API_BASE = "https://tempmailnvc4wrd32.app.n8n.cloud/webhook";
+const LOGIN_WEBHOOK = `${API_BASE}/owner-portal/login`;
+const SAVE_WEBHOOK = `${API_BASE}/owner-portal/save`;
+
+/* ---------------- state ---------------- */
+let state = {
+  phone: null,
+  ownerName: '',
+  properties: [],
+  slots: [],
+  activePropertyId: null,
+  viewYear: new Date().getFullYear(),
+  viewMonth: new Date().getMonth(), // 0-indexed
+  modalDate: null,
+  modalStatus: 'available',
+  modalTimes: []
+};
+
+const $ = sel => document.querySelector(sel);
+const todayISO = () => new Date().toISOString().slice(0,10);
+
+/* ---------------- toast ---------------- */
+function toast(msg){
+  const t = $('#toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2400);
+}
+
+/* ---------------- login ---------------- */
+$('#login-btn').addEventListener('click', doLogin);
+$('#phone-input').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+
+async function doLogin(){
+  const raw = $('#phone-input').value.trim();
+  const phone = raw.replace(/\D/g,'');
+  const errEl = $('#login-error');
+  errEl.style.display = 'none';
+  if (phone.length < 6){
+    errEl.textContent = 'Enter a valid phone number.';
+    errEl.style.display = 'block';
+    return;
+  }
+  const btn = $('#login-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Checking…';
+  try{
+    const res = await fetch(LOGIN_WEBHOOK, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone })
+    });
+
+    if (!res.ok) throw new Error(`Login request failed: ${res.status}`);
+
+    const data = await res.json();
+
+    if (!data.success) {
+      throw new Error(data.message || 'Phone number not found.');
+    }
+
+    data.properties = Array.isArray(data.properties) ? data.properties : [];
+    data.slots = Array.isArray(data.slots) ? data.slots : [];
+
+    state.phone = phone;
+    state.ownerName = data.owner_name;
+    state.properties = data.properties;
+    state.slots = data.slots;
+    state.activePropertyId = state.properties[0]?.property_id || null;
+
+    // Remember only the demo login, not server/session data.
+    localStorage.setItem('villa_owner_phone', phone);
+
+    enterPortal();
+  }catch(err){
+    errEl.textContent = 'Could not load the demo data.';
+    errEl.style.display = 'block';
+  }finally{
+    btn.disabled = false;
+    btn.textContent = 'Open my calendar';
+  }
+}
+
+$('#logout-btn').addEventListener('click', () => {
+  localStorage.removeItem('villa_owner_phone');
+  state.phone = null;
+  $('#portal-view').style.display = 'none';
+  $('#owner-chip').style.display = 'none';
+  $('#login-view').style.display = 'block';
+  $('#phone-input').value = '';
+});
+
+function enterPortal(){
+  $('#login-view').style.display = 'none';
+  $('#portal-view').style.display = 'block';
+  $('#owner-chip').style.display = 'flex';
+  $('#owner-chip-text').textContent = state.ownerName ? `${state.ownerName} · ${state.phone}` : state.phone;
+  renderPropertyPills();
+  renderCalendar();
+}
+
+/* ---------------- property pills ---------------- */
+function renderPropertyPills(){
+  const row = $('#prop-select-row');
+  row.innerHTML = '';
+  state.properties.forEach(p => {
+    const pill = document.createElement('button');
+    pill.className = 'prop-pill' + (p.property_id === state.activePropertyId ? ' active' : '');
+    pill.textContent = p.property_name || p.property_id;
+    pill.addEventListener('click', () => {
+      state.activePropertyId = p.property_id;
+      renderPropertyPills();
+      renderCalendar();
+    });
+    row.appendChild(pill);
+  });
+}
+
+/* ---------------- calendar rendering ---------------- */
+const DOW = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+$('#cal-prev').addEventListener('click', () => shiftMonth(-1));
+$('#cal-next').addEventListener('click', () => shiftMonth(1));
+$('#cal-today').addEventListener('click', () => {
+  const n = new Date();
+  state.viewYear = n.getFullYear();
+  state.viewMonth = n.getMonth();
+  renderCalendar();
+});
+function shiftMonth(delta){
+  state.viewMonth += delta;
+  if (state.viewMonth < 0){ state.viewMonth = 11; state.viewYear--; }
+  if (state.viewMonth > 11){ state.viewMonth = 0; state.viewYear++; }
+  renderCalendar();
+}
+
+function slotsForDate(dateISO){
+  return state.slots.filter(s => s.property_id === state.activePropertyId && s.date === dateISO);
+}
+
+function renderCalendar(){
+  $('#cal-month-label').textContent = `${MONTHS[state.viewMonth]} ${state.viewYear}`;
+
+  const dowRow = $('#cal-dow-row');
+  dowRow.innerHTML = '';
+  DOW.forEach(d => {
+    const el = document.createElement('div');
+    el.className = 'cal-dow';
+    el.textContent = d;
+    dowRow.appendChild(el);
+  });
+
+  const grid = $('#cal-grid');
+  grid.innerHTML = '';
+
+  const firstOfMonth = new Date(state.viewYear, state.viewMonth, 1);
+  const startPad = firstOfMonth.getDay();
+  const daysInMonth = new Date(state.viewYear, state.viewMonth + 1, 0).getDate();
+  const today = todayISO();
+
+  for (let i=0; i<startPad; i++){
+    const pad = document.createElement('div');
+    pad.className = 'cal-cell pad';
+    grid.appendChild(pad);
+  }
+
+  for (let day=1; day<=daysInMonth; day++){
+    const dateISO = `${state.viewYear}-${String(state.viewMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    const cell = document.createElement('div');
+    cell.className = 'cal-cell' + (dateISO === today ? ' today' : '');
+
+    const num = document.createElement('div');
+    num.className = 'daynum';
+    num.textContent = day;
+    cell.appendChild(num);
+
+    const daySlots = slotsForDate(dateISO).filter(s => s.status !== 'removed');
+    if (daySlots.length){
+      const hasAvail = daySlots.some(s => s.status === 'available');
+      const stamp = document.createElement('div');
+      stamp.className = 'stamp ' + (hasAvail ? 'avail' : 'blocked');
+      stamp.textContent = hasAvail ? 'OPEN' : 'BLOCKED';
+      cell.appendChild(stamp);
+
+      if (hasAvail){
+        const times = document.createElement('div');
+        times.className = 'cell-times';
+        times.innerHTML = daySlots.filter(s=>s.status==='available')
+          .map(s => `${s.start_time}–${s.end_time}`).join('<br>');
+        cell.appendChild(times);
+      }
+    }
+
+    cell.addEventListener('click', () => openModal(dateISO));
+    grid.appendChild(cell);
+  }
+}
+
+/* ---------------- modal ---------------- */
+function openModal(dateISO){
+  if (!state.activePropertyId){ toast('Select a property first.'); return; }
+  state.modalDate = dateISO;
+  const existing = slotsForDate(dateISO).filter(s => s.status !== 'removed');
+  const hasAvail = existing.some(s => s.status === 'available');
+  state.modalStatus = existing.length === 0 ? 'available' : (hasAvail ? 'available' : 'blocked');
+  state.modalTimes = existing.filter(s => s.status === 'available')
+    .map(s => ({ slot_id: s.slot_id, start_time: s.start_time, end_time: s.end_time }));
+
+  $('#modal-date').textContent = new Date(dateISO+'T00:00:00').toLocaleDateString(undefined,{ weekday:'long', year:'numeric', month:'long', day:'numeric' });
+  updateStatusToggleUI();
+  renderTimeList();
+  $('#modal-backdrop').classList.add('open');
+}
+function closeModal(){ $('#modal-backdrop').classList.remove('open'); }
+$('#modal-close').addEventListener('click', closeModal);
+$('#modal-cancel').addEventListener('click', closeModal);
+$('#modal-backdrop').addEventListener('click', e => { if (e.target.id === 'modal-backdrop') closeModal(); });
+
+$('#toggle-avail').addEventListener('click', () => { state.modalStatus='available'; updateStatusToggleUI(); });
+$('#toggle-blocked').addEventListener('click', () => { state.modalStatus='blocked'; updateStatusToggleUI(); });
+
+function updateStatusToggleUI(){
+  $('#toggle-avail').classList.toggle('active', state.modalStatus === 'available');
+  $('#toggle-blocked').classList.toggle('active', state.modalStatus === 'blocked');
+  $('#avail-fields').style.display = state.modalStatus === 'available' ? 'block' : 'none';
+}
+
+function renderTimeList(){
+  const list = $('#time-list');
+  list.innerHTML = '';
+  if (state.modalTimes.length === 0){
+    const empty = document.createElement('div');
+    empty.style.cssText = 'font-family:JetBrains Mono,monospace;font-size:12px;color:var(--ink-soft);padding:8px 2px;';
+    empty.textContent = 'No time windows added yet.';
+    list.appendChild(empty);
+  }
+  state.modalTimes.forEach((t, idx) => {
+    const row = document.createElement('div');
+    row.className = 'time-list-item';
+    row.innerHTML = `<span>${t.start_time} – ${t.end_time}</span>`;
+    const del = document.createElement('button');
+    del.textContent = '✕';
+    del.addEventListener('click', () => {
+      state.modalTimes.splice(idx,1);
+      renderTimeList();
+    });
+    row.appendChild(del);
+    list.appendChild(row);
+  });
+}
+
+$('#add-time-btn').addEventListener('click', () => {
+  const start = $('#new-start').value;
+  const end = $('#new-end').value;
+  if (!start || !end || start >= end){ toast('Enter a valid start/end time.'); return; }
+  state.modalTimes.push({ start_time:start, end_time:end });
+  renderTimeList();
+});
+
+/* ---------------- save / delete ---------------- */
+$('#modal-save').addEventListener('click', saveModal);
+
+async function saveModal(){
+  const btn = $('#modal-save');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Saving…';
+  try{
+    const payload = {
+      phone: state.phone,
+      property_id: state.activePropertyId,
+      date: state.modalDate,
+      status: state.modalStatus === 'blocked' ? 'unavailable' : 'available',
+      times: state.modalStatus === 'blocked'
+        ? []
+        : state.modalTimes.map(t => ({
+            slot_id: t.slot_id || null,
+            start_time: t.start_time,
+            end_time: t.end_time
+          }))
+    };
+
+    const res = await fetch(SAVE_WEBHOOK, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) throw new Error(`Save request failed: ${res.status}`);
+
+    const result = await res.json();
+
+    if (!result.success) {
+      throw new Error(result.message || 'Could not save availability.');
+    }
+
+    // If n8n returns updated slots, refresh the UI from them.
+    if (Array.isArray(result.slots)) {
+      state.slots = result.slots;
+    }
+
+    toast('Availability saved.');
+    closeModal();
+    renderCalendar();
+  }catch(err){
+    toast('Could not save. Try again.');
+  }finally{
+    btn.disabled = false;
+    btn.textContent = 'Save';
+  }
+}
+
+async function callAPI(path, body){
+  const res = await fetch(`${API_BASE}${path}`, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(body)
+  });
+  return res.json();
+}
+
+/* ---------------- auto-login if remembered ---------------- */
+(function tryAutoLogin(){
+  const saved = localStorage.getItem('villa_owner_phone');
+  if (saved){
+    $('#phone-input').value = saved;
+    doLogin();
+  }
+})();
+</script>
+
+</body>
+</html>
